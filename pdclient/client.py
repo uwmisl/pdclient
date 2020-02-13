@@ -1,4 +1,6 @@
+import json
 import requests
+import time
 
 class RpcClient(object):
     def __init__(self, url):
@@ -13,27 +15,29 @@ class RpcClient(object):
             "id": self._id,
         }
         self._id += 1
+
         response = requests.post(self._url, json=payload).json()
-        print(response)
+
         if 'result' in response:
             return response['result']
         else:
             raise RuntimeError("Unexpected response: %s" % response)
 
-    def get_board_definition(self):
-        return self.callrpc("get_board_definition")
+    def __getattr__(self, name):
+        def f(*args):
+            return self.callrpc(name, *args)
+        return f
 
-    def set_electrode_pins(self, pins):
-        return self.callrpc('set_electrode_pins', pins)
-
+"""A mostly thin wrapper around RpcClient to provide some convenience utilities
+"""
 class PdClient(object):
     def __init__(self, host):
         self._layout = None
-        self._client = RpcClient(host)
+        self.client = RpcClient(host)
 
     def layout(self):
         if self._layout is None:
-            self._layout = self._client.get_board_definition()['layout']
+            self._layout = self.client.get_board_definition()['layout']
 
         return self._layout
 
@@ -71,7 +75,27 @@ class PdClient(object):
 
         electrode_numbers: List of integers, giving pin numbers to enable
         """
-        print("Setting pins: %s" % electrode_numbers)
-        resp = self._client.set_electrode_pins(electrode_numbers)
-        print(resp)
+        self.client.set_electrode_pins(electrode_numbers)
 
+    def bulk_capacitance(self):
+        """Get the most recent scan of electrode capacitance
+        """
+        return self.client.get_bulk_capacitance()
+
+    def temperatures(self):
+        """Get the most recent temperature measurements
+
+        Returns a vector of temperatures (floats) in degC
+
+        The length of the return value depends on device configuraiton, and
+        may be zero.
+        """
+        return self.client.get_temperatures()
+
+    def set_pwm_duty_cycle(self, chan, duty_cycle):
+        """Set duty cycle on a PWM output channel
+
+        chan is an integer specifying which PWM channel to change
+        duty_cycle is float in range 0.0 to 1.0.
+        """
+        return self.client.set_pwm_duty_cycle(chan, duty_cycle)
