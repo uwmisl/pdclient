@@ -61,6 +61,9 @@ class PdClient(object):
 
         return pin
 
+    def move_drop(self, start, size, dir):
+        return self.client.move_drop(start, size, dir)
+
     def enable_positions(self, positions):
         """Enable the given electrodes
 
