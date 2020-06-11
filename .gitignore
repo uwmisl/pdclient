@@ -1,4 +1,5 @@
 # python build outputs
+.mypy_cache
 build
 dist
 *.egg-info
