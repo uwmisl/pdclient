@@ -38,7 +38,8 @@ class Drop(object):
 
     def move(self, dir):
         response = self.client.move_drop(self.pos, self.size, dir2str(dir))
-        self.pos = move(self.pos, dir)
+        if(response['success']):
+            self.pos = move(self.pos, dir)
         return response
 
     def move_up(self):
@@ -52,3 +53,21 @@ class Drop(object):
 
     def move_right(self):
         return self.move(Dir.RIGHT)
+
+    def pins(self):
+        """Return all pins which are part of the drop
+        """
+        pins = []
+        for x in range(self.size[0]):
+            for y in range(self.size[1]):
+                loc = (self.pos[0] + x, self.pos[1] + y)
+                pins.append(self.client.get_pin(loc))
+        return pins
+
+    def activate(self):
+        """Activate the electrodes for this drop
+        """
+        self.client.enable_pins(self.pins())
+
+    def __str__(self):
+        return f"Drop(pos={self.pos}, size={self.size})"

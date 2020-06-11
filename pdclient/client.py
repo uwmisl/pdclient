@@ -1,6 +1,9 @@
 import json
 import requests
 import time
+from typing import Optional, Sequence, Tuple
+
+import pdclient.reservoir as reservoir
 
 class RpcClient(object):
     def __init__(self, url):
@@ -32,23 +35,32 @@ class RpcClient(object):
 """
 class PdClient(object):
     def __init__(self, host):
-        self._layout = None
+        self._board = None
         self.client = RpcClient(host)
 
     def layout(self):
-        if self._layout is None:
-            self._layout = self.client.get_board_definition()['layout']
+        if self._board is None:
+            self._board = self.client.get_board_definition()
 
-        return self._layout
+        return self._board['layout']
+    def grid(self):
+        layout = self.layout()
+        
+        grid_key = 'grid'
+        # Backwards compatibility for old board definition format
+        if 'pins' in layout:
+            grid_key = 'pins'
+        return layout[grid_key]
 
-    def get_pin(self, p):
+    def get_pin(self, location: Sequence[int]) -> int:
         """Get the electrode pin number from a grid location using the layout
 
-        p: (x, y) coordinate of the electrode to lookup
+        location: (x, y) coordinate of the electrode to lookup
         """
+        p = location
         try:
-            layout = self.layout()
-            pin = layout['pins'][p[1]][p[0]]
+            grid = self.grid()
+            pin = grid[p[1]][p[0]]
         except IndexError:
             raise ValueError(
                 "Invalid position (%d, %d), it is outside of the layout range"
@@ -60,8 +72,29 @@ class PdClient(object):
                  % (p[0], p[1]))
 
         return pin
+    
+    def get_grid_location(self, pin: int) -> Optional[Tuple]:
+        """Get the grid location for a pin number
 
-    def move_drop(self, start, size, dir):
+        Returns None if the pin is not found in the grid definition
+        """
+        for y, row in enumerate(self.grid()):
+            for x, electrode in enumerate(row):
+                if electrode == pin:
+                    return (x, y)
+        return None
+
+    def get_reservoir(self, id: int) -> reservoir.ReservoirDriver:
+        layout = self.layout()
+        if 'peripherals' not in layout:
+            raise ValueError("Board definition has no reservoirs")
+        
+        for definition in layout['peripherals']:
+            if definition.get('class') == 'reservoir' and definition.get('id') == id:
+                return reservoir.create_driver(definition, self)
+        raise ValueError(f"No reservor found for id={id}")
+
+    def move_drop(self, start: Sequence[int], size: Sequence[int], dir):
         return self.client.move_drop(start, size, dir)
 
     def enable_positions(self, positions):
