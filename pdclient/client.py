@@ -113,6 +113,11 @@ class PdClient(object):
         """
         self.client.set_electrode_pins(electrode_numbers)
 
+    def active_capacitance(self):
+        """Get the most recent capacitance for all active electrodes
+        """
+        return self.client.get_active_capacitance()
+
     def bulk_capacitance(self):
         """Get the most recent scan of electrode capacitance
         """
