@@ -172,9 +172,9 @@ def get_v4_controller(client, output_scale = 1.0):
     # deg C temperature rise
     return TemperatureControl(
         client,
-        channel_gains=[0.006, 0.003, 0.003, 0.006],
-        ymax=[0.90, 0.5, 0.5, 0.90],
-        kP=12.0,
+        channel_gains=[0.007, 0.003, 0.003, 0.007],
+        ymax=[0.98, 0.5, 0.5, 0.98],
+        kP=18.0,
         tI=6.0, # seconds
         tD=0.8,
         alpha_drop=ALPHA_DROP,
