@@ -1,4 +1,9 @@
 from enum import Enum
+from typing import List, Sequence
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from pdclient import PdClient
 
 class Dir(Enum):
     UP = 1
@@ -30,28 +35,48 @@ def move(pos, direction):
     return newpos
 
 class Drop(object):
-    def __init__(self, pos, size, client):
+    """Represents a drop on the electrode board"""
+
+    def __init__(self, pos: Sequence[int], size: Sequence[int], client: 'PdClient'):
         self.pos = pos
         self.size = size
         self.client = client
-        self.history = []
 
-    def move(self, dir):
+    def move(self, dir: Dir):
+        """Move the drop one electrode in the given direction
+
+        If the move is successful, `self.pos` is updated to reflect the new
+        position.
+
+        Args:
+            dir: One of [Dir.UP, Dir.DOWN, dir.LEFT, dir.RIGHT]
+
+        Returns:
+            The `move_drop` response object
+        """
         response = self.client.move_drop(self.pos, self.size, dir2str(dir))
         if(response['success']):
             self.pos = move(self.pos, dir)
         return response
 
     def move_up(self):
+        """Move the drop one electrode up (i.e. y = y - 1)
+        """
         return self.move(Dir.UP)
 
     def move_down(self):
+        """Move the drop one electrode down (i.e. y = y + 1)
+        """
         return self.move(Dir.DOWN)
 
     def move_left(self):
+        """Move the drop one electrode left (i.e. x = x - 1)
+        """
         return self.move(Dir.LEFT)
 
     def move_right(self):
+        """Move the drop one electrode right (i.e. x = x + 1)
+        """
         return self.move(Dir.RIGHT)
 
     def pins(self):

@@ -1,5 +1,6 @@
 import threading
 import time
+from typing import List
 
 class PIDControl(object):
     """A single channel PID controller for temperature
@@ -50,7 +51,7 @@ class PIDControl(object):
         return self.accum * self.kP
 
 class TemperatureControl(object):
-    """Provides a full temperature controller for a purple drop heater
+    """Provides a temperature controller for a purple drop heater
 
     It controls all heating channels to maintain a constant temperature at all
     electrodes.
@@ -89,13 +90,22 @@ class TemperatureControl(object):
             pid = PIDControl(kP=g*kP, tI=tI, tD=tD, yMax=ch_ymax, yMin=0.0, iMax=50.0*g)
             self._pids.append(pid)
 
-    def set_target(self, target):
+    def set_target(self, target: float):
+        """Set the target temperature
+
+        Args:
+            target : Temperature in degrees C
+        """
         self.setpoint = target
 
-    def integrals(self):
+    def integrals(self) -> List[float]:
+        """Return the PID integration terms for all controllers
+        """
         return [p.integral_out() for p in self._pids]
 
     def start(self):
+        """Run temperature controller background thread
+        """
         if self.thread is not None:
             raise RuntimeError("Called start() on TemperatureControl, but a thread is already running")
 
@@ -108,12 +118,25 @@ class TemperatureControl(object):
         self.thread.start()
 
     def stop(self):
+        """Stop temperature controller background thread
+        """
         self.stop_flag = True
         if self.thread is not None:
             self.thread.join()
             self.thread = None
 
     def run(self):
+        """Periodic run function
+
+        The background thread will call this function periodically to run the
+        controller. If not running the background thread, user should call this
+        function periodically.
+
+        Timing is not critical, as the temperature processes are slow and the
+        controller gains are adjusted based on actual time elapsed between
+        calls. A period of approximately a half second between calls is
+        reasonable.
+        """
         N = len(self._pids)
         outputs = [0.0] * N
         cur_time = time.monotonic()
