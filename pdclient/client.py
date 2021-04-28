@@ -1,4 +1,3 @@
-from enum import Enum
 import json
 import requests
 import time
@@ -6,18 +5,14 @@ from typing import Dict, Iterator, List, Optional, Sequence, Tuple
 
 import pdclient.reservoir as reservoir
 
-class FeedbackMode(Enum):
-    """Enumeration of feedback modes for set_feedback_command function
-    """
-    DISABLED = 0
-    NORMAL = 1
-    DIFFERENTIAL = 2
+# Feedback mode settings
+FB_DISABLED = 0
+FB_NORMAL = 1
+FB_DIFFERENTIAL = 2
 
-class CapacitanceGroupSetting(Enum):
-    """Enumeration of the drive group settings
-    """
-    HIGHGAIN = 0
-    LOWGAIN = 1
+# Capacitance drive group settings
+CAP_HIGHGAIN = 0
+CAP_LOWGAIN = 1
 
 class RpcClient(object):
     """General RPC call client
