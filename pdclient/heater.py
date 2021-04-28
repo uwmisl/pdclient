@@ -87,8 +87,10 @@ class TemperatureControl(object):
                 ch_ymax = ymax[i]
             except TypeError:
                 ch_ymax = ymax
-            pid = PIDControl(kP=g*kP, tI=tI, tD=tD, yMax=ch_ymax, yMin=0.0, iMax=50.0*g)
+            pid = PIDControl(kP=g*kP, tI=tI, tD=tD, yMax=ch_ymax, yMin=0.0, iMax=75.0*g)
             self._pids.append(pid)
+
+        self.outputs = [0.0] * len(self._pids)
 
     def set_target(self, target: float):
         """Set the target temperature
@@ -163,6 +165,7 @@ class TemperatureControl(object):
         if(k_filter > 1.0):
             k_filter = 1.0
         self.drop_temperature = self.drop_temperature * (1 - k_filter) + drop_adjusted * k_filter
+        self.outputs = outputs
         return outputs
 
     def __thread_entry(self):
@@ -198,6 +201,33 @@ def get_v4_controller(client, output_scale = 1.0):
         channel_gains=[0.007, 0.003, 0.003, 0.007],
         ymax=[0.98, 0.5, 0.5, 0.98],
         kP=18.0,
+        tI=6.0, # seconds
+        tD=0.8,
+        alpha_drop=ALPHA_DROP,
+        k_drop=K_DROP,
+    )
+
+def get_v4_1_controller(client, output_scale = 1.0):
+    """Create a TemperatureControl designed for the v4 electrode board
+    """
+    # The deg per deg drop between sensor and heated water drop
+    # i.e. T_drop = T_sensor - (T_sensor - T_ambient) * K_DROP
+    K_DROP = 0.10
+    # ALPHA_DROP is the gain of a single tap IIR low-pass filter used to
+    # generate the estimated drop temperature
+    # i.e. T_drop_filt[n] = T_drop[n-1] * (1-ALPHA_DROP) + T_drop[n] * ALPHA_DROP * dt
+    ALPHA_DROP = 0.18
+    # These parameters were determined experimentally using a rev4 electrode board and
+    # a 6um mylar film dielectric.
+
+    # Channel gains are intended to normalize the differences in electrodes,
+    # and they are determined by observing the steady state duty_cycle per
+    # deg C temperature rise
+    return TemperatureControl(
+        client,
+        channel_gains=[0.01, 0.01, 0.01, 0.01],
+        ymax=[0.98, 0.98, 0.98, 0.98],
+        kP=24.0,
         tI=6.0, # seconds
         tD=0.8,
         alpha_drop=ALPHA_DROP,
