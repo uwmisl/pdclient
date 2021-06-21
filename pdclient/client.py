@@ -325,3 +325,10 @@ class PdClient(object):
         duty_cycle is float in range 0.0 to 1.0.
         """
         return self.client.set_pwm_duty_cycle(chan, duty_cycle)
+
+    def hv_supply_voltage(self) -> float:
+        """Get the latest voltage measurement for the high voltage supply rail
+
+        Returns a float, in volts.
+        """
+        return self.client.get_hv_supply_voltage()
