@@ -332,3 +332,26 @@ class PdClient(object):
         Returns a float, in volts.
         """
         return self.client.get_hv_supply_voltage()
+
+    def parameter_definitions(self) -> dict:
+        """Get the list of all parameters which can be set in the firmware
+        """
+        return self.client.get_parameter_definitions()
+
+    def parameter(self, id: int ) -> Union[bool, int, float]:
+        """Get the value of a particular parameter
+        """
+        return self.client.get_parameter(id)
+
+    def set_parameter(self, id: int, value: Union[int, float]):
+        """Set the value of a particular parameter
+        """
+        self.client.set_parameter(id, value)
+
+    def calibrate_capacitance_offset(self):
+        """Trigger the re-calibration of the capacitance sense amplifier offset
+
+        Note: This calibrates for the zero-input integrator ramp rate. It is not
+        a per-electrode offset calibration.
+        """
+        self.client.calibrate_capacitance_offset()
