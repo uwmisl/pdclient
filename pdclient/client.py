@@ -1,8 +1,9 @@
 import json
 import requests
 import time
-from typing import Dict, Iterator, List, Optional, Sequence, Tuple
+from typing import Dict, Iterator, List, Optional, Sequence, Tuple, Union
 
+from pdclient.api_types import Grid, MoveCommand
 import pdclient.reservoir as reservoir
 
 # Feedback mode settings
@@ -46,28 +47,6 @@ class RpcClient(object):
             return self.callrpc(name, *args)
         return f
 
-class Grid(object):
-    """Represents a grid in the board layout for PdClient
-    """
-    def __init__(self, pins, pitch=1.0, origin=(0.0, 0.0)):
-        if len(origin) != 2:
-            raise ValueError("Origin must be a 2-tuple containing (x, y)")
-        self.pins = pins
-        self.pitch = pitch
-        self.origin = tuple(origin)
-
-    def __getitem__(self, key) -> List[int]:
-        """Override indexer so a row of the grid can be accessed directly, 
-        treating the Grid object as an array
-        """
-        return self.pins[key]
-    
-    def __len__(self) -> int:
-        return len(self.pins)
-    
-    def __iter__(self) -> Iterator[List[int]]:
-        for row in self.pins:
-            yield row
 
 class PdClient(object):
     """A PdClient object provides the interface for accessing PurpleDrop via RPC calls
@@ -90,7 +69,7 @@ class PdClient(object):
         return self._board['layout']
 
     def grid(self, idx: int=0) -> Grid:
-        """Get the one grid object from the electrode board definition
+        """Get one grid object from the electrode board definition
 
         idx: Index indicating which grid to return for board with multiple grids
         """
@@ -126,10 +105,15 @@ class PdClient(object):
         """Get the electrode pin number from a grid location using the layout
 
         location: (x, y) coordinate of the electrode to lookup
-        grid: Index indicating which grid is to be used for a board with 
-          multiple grids 
+        grid: Index indicating which grid is to be used for a board with
+          multiple grids
         """
         p = location
+        if len(p) != 2:
+            raise ValueError(f"location argument ({location}) must be of length 2")
+        if p[0] < 0 or p[1] < 0:
+            raise ValueError(f"Location argument ({location}) must be only positive integers")
+
         try:
             g = self.grid(grid)
             pin = g[p[1]][p[0]]
@@ -151,7 +135,7 @@ class PdClient(object):
         Returns: ((x, y), grid_idx) if the pin is located, or None if the pin
         is not found in the grid definition
         """
-        
+
         for grid_idx, g in enumerate(self.grids()):
             for y, row in enumerate(g):
                 for x, electrode in enumerate(row):
@@ -172,6 +156,9 @@ class PdClient(object):
     def move_drop(self, start: Sequence[int], size: Sequence[int], dir: str) -> dict:
         """Executes a device controlled drop movement sequence
 
+        DEPECRATED: This method has been replaced buy the `move_drops` method,
+        and may be removed in the future. Consider using the new method instead.
+
         Args:
             start : The x,y location of the drop initial position (e.g. `[2, 3]`)
             size : The width and height of the drop (e.g. [2, 2])
@@ -182,7 +169,7 @@ class PdClient(object):
             a success flag and a time series of capacitance data captured
             during the move.
 
-            The return dict is of the form: 
+            The return dict is of the form:
 
               {
                   "success": bool,
@@ -195,12 +182,47 @@ class PdClient(object):
                   }
               }
 
-            closed_loop_result is only present when "closed_loop" is true. It 
+            closed_loop_result is only present when "closed_loop" is true. It
             will always be true for devices that support capacitance sensing,
-            but is present to allow devices without sensing to implement an 
+            but is present to allow devices without sensing to implement an
             open-loop `move_drop` function.
         """
         return self.client.move_drop(start, size, dir)
+
+    def move_drops(self, move_commands: Sequence[Union[Dict, MoveCommand]]) -> List[dict]:
+        """Executes a device controlled move of drops
+
+        This command supports movement of up to 5 drops at a time -- limited by
+        the number of capacitance groups supported on the PurpleDrop -- using
+        capacitance feedback to determine when a move is completed.
+
+        Args:
+            move_commands: A list of MoveCommand objects, one for each drop movement.
+                           Alternatively, a dict with the proper fields is accepted.
+
+        Returns:
+            A list of dict obections containing the results of each move command,
+            including a success flag, and a time series of the capacitance data
+            captured during the move which can be used to measure movement velocity.
+
+            Each result object is of the form:
+
+                {
+                  "success": bool,
+                  "closed_loop": bool,
+                  "closed_loop_result": {
+                      "pre_capacitance": float,
+                      "post_capacitance": float,
+                      "time_series": List[float],
+                      "capacitance_series": List[float]
+                  }
+              }
+        """
+        args = [m.to_dict() if isinstance(m, MoveCommand) else m for m in move_commands]
+        for arg in args:
+            if not isinstance(arg, dict):
+                raise ValueError(f"Arg {arg} invalid. Move commands must be either MoveCommand object or dict")
+        return self.client.move_drops(args)
 
     def enable_positions(self, positions):
         """Enable the specified set of electrodes by grid location
@@ -217,15 +239,15 @@ class PdClient(object):
         PurpleDrop supports two drive groups which can be driven independently,
         with different duty cycles. Adjusting the duty cycle is primarily used
         for feedback control performed on the device, but can be set remotely
-        via RPC calls. 
-        
-        For most use cases, drive group 0 can be used exclusively. But when 
+        via RPC calls.
+
+        For most use cases, drive group 0 can be used exclusively. But when
         using feedback control, e.g. for drop splitting, pins for drive group 0
-        and drive group 1 must be setup prior to enabling feedback control. 
+        and drive group 1 must be setup prior to enabling feedback control.
 
         Unused drive groups should be disabled by setting an empty pin list.
 
-        Arguments: 
+        Arguments:
 
           - pins: List of integers, giving pin numbers to enable
           - group_id: Drive group index
@@ -245,10 +267,10 @@ class PdClient(object):
                 - 0: Disabled
                 - 1: Normal
                 - 2: Differential
-            - input_groups_p_mask: Bit mask indicating which capacitance groups to 
+            - input_groups_p_mask: Bit mask indicating which capacitance groups to
               sum for positive input (e.g. for groups 0 and 2: 5)
             - input_groups_n_mask: Bit mask for negative input groups (used in differential mode)
-            - baseline: The duty cycle to apply to both drive groups when no error signal is 
+            - baseline: The duty cycle to apply to both drive groups when no error signal is
               present (0-255)
         """
         self.client.set_feedback_command(target, mode, input_groups_p_mask, input_groups_n_mask, baseline)
@@ -281,10 +303,10 @@ class PdClient(object):
     def group_capacitance(self) -> Dict[str, List]:
         """Get the most recent group capacitance measurements
 
-        Returns: dict containins the raw and calibrated values for all 
-        capacitance groups. 
+        Returns: dict containins the raw and calibrated values for all
+        capacitance groups.
 
-        Example: 
+        Example:
 
             {
                 "raw": [10, 11, 400, 10, 9],
